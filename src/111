@@ -1,0 +1,138 @@
+import { useState, useEffect, useRef } from 'react';
+
+export default function Opening({ onComplete }) {
+  // 记录已经打印和正在打印的行
+  const [lines, setLines] = useState([]);
+  const [activeLineIndex, setActiveLineIndex] = useState(0);
+  const [isFinished, setIsFinished] = useState(false);
+
+  // 打字音效（请确保 public 目录下有 type-sound.mp3）
+  const typeSound = useRef(new Audio('/type-sound.mp3'));
+
+  const script = [
+    { text: "中国现存古桥约12000座。", speed: 100, pause: 800, className: "" },
+    { text: "其中有据可查的结构档案，不足3%。", speed: 100, pause: 1200, className: "" },
+    { text: "每消失一座古桥，人类失去的不只是石头和木头——", speed: 80, pause: 800, className: "" },
+    { text: "是一套用千年试错换来的，与自然共处的答案。", speed: 120, pause: 2500, className: "" },
+    { text: "天工系统，启动。", speed: 150, pause: 1000, className: "system-start glitch" },
+    { text: "任务：找回广安桥。", speed: 100, pause: 2000, className: "system-start" }
+  ];
+
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const playScript = async () => {
+      let currentLines = [];
+
+      // 延迟1秒启动
+      await sleep(1000);
+
+      for (let i = 0; i < script.length; i++) {
+        if (isCancelled) return;
+        
+        const lineData = script[i];
+        currentLines.push({ text: '', className: lineData.className });
+        setActiveLineIndex(i);
+
+        // 逐字打印
+        for (let j = 0; j < lineData.text.length; j++) {
+          if (isCancelled) return;
+          
+          currentLines[i].text = lineData.text.substring(0, j + 1);
+          setLines([...currentLines]);
+          
+          // 播放打字音效（重置时间以允许连续播放）
+          if (typeSound.current) {
+            typeSound.current.currentTime = 0;
+            typeSound.current.play().catch(()=>{}); // 忽略浏览器自动播放限制报错
+          }
+
+          await sleep(lineData.speed + (Math.random() * 50 - 25));
+        }
+
+        // 处理毛刺效果：0.5秒后移除 glitch 类
+        if (lineData.className.includes("glitch")) {
+          setTimeout(() => {
+            if (isCancelled) return;
+            currentLines[i].className = lineData.className.replace("glitch", "").trim();
+            setLines([...currentLines]);
+          }, 500);
+        }
+
+        // 句间停顿
+        await sleep(lineData.pause);
+      }
+
+      // 打字机结束后，进入询问环节
+      if (!isCancelled) {
+        setPhase("prompt");
+      }
+    };
+
+    playScript();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [onComplete]);
+
+  return (
+    <>
+      <style>{`
+        .opening-bg {
+          position: fixed; inset: 0; background-color: #050505; color: #00ff41;
+          font-family: 'Courier New', Courier, monospace, 'SimHei';
+          display: flex; justify-content: center; align-items: center; z-index: 50;
+        }
+        .scanlines {
+          position: fixed; inset: 0; pointer-events: none; z-index: 52;
+          background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+          background-size: 100% 4px;
+        }
+        .vignette {
+          position: fixed; inset: 0; pointer-events: none; z-index: 53;
+          background: radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,0,0,0.8) 100%);
+        }
+        .terminal {
+          width: 80%; max-width: 800px; font-size: 1.5rem; line-height: 2;
+          text-shadow: 0 0 5px #ffffff; z-index: 51;
+        }
+        .line { min-height: 2rem; margin-bottom: 15px; opacity: 0.9; }
+        .cursor {
+          display: inline-block; width: 12px; height: 1.2rem; background-color: currentColor;
+          animation: blink 1s step-end infinite; vertical-align: text-bottom; margin-left: 5px;
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        .system-start {
+          color: #598bdb; text-shadow: 0 0 10px #598bdb, 0 0 20px #598bdb;
+          font-weight: bold; font-size: 2rem;
+        }
+        .glitch { animation: glitch-anim 0.2s linear infinite; }
+        @keyframes glitch-anim {
+          0% { transform: translate(0) } 20% { transform: translate(-2px, 1px) }
+          40% { transform: translate(-1px, -1px) } 60% { transform: translate(2px, 1px) }
+          80% { transform: translate(1px, -1px) } 100% { transform: translate(0) }
+        }
+      `}</style>
+
+      <div className="opening-bg">
+        <div className="scanlines"></div>
+        <div className="vignette"></div>
+        
+        <div className="terminal">
+          {lines.map((line, index) => (
+            <div key={index} className={`line ${line.className}`}>
+              {line.text}
+              {/* 仅在当前正在打字的行显示光标，或者如果是最后一行且全部打完了保留光标 */}
+              {(index === activeLineIndex || (isFinished && index === lines.length - 1)) && (
+                <span className="cursor"></span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
